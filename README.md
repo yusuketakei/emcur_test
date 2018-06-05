@@ -1,1 +1,3 @@
 # emcur_test
+
+emcurプロジェクトのテストリポジトリ
