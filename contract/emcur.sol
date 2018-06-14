@@ -1,5 +1,8 @@
-pragma solidity ^0.4.0;
-contract Bank {
+pragma solidity ^0.4.16;
+
+import {Memory} from "github.com/ethereum/solidity-examples/blob/master/src/unsafe/Memory.sol";
+import {Bytes} from "github.com/ethereum/solidity-examples/blob/master/src/bytes/Bytes.sol" ;
+contract EMCUR {
 
 // --ストラクチャ定義 Start--
 	// ユーザ情報
@@ -86,12 +89,12 @@ contract Bank {
 	    uint processFlowId;
 	    // requestId
 	    uint requestId;
-	    // Process
-	    Process[MAX_PROCESS_NUM] processes ;
 	}
 	// 各プロセス
 	struct Process {
-	    // id
+	    // processId
+	    uint processId;
+	    // flow id
 	    uint processFlowId;
 	    // processNumber
 	    uint processNumber;
@@ -111,6 +114,24 @@ contract Bank {
 	    bytes32 ipfsHashSecond;
 	}
 	
+	//LinkedIndexListの要素
+	struct LinkedIndexlement {
+	    //前の要素へのリンク(1つ目のmappingのキー)
+	    bytes32 prevElementLink ;
+	    //次の要素へのリンク(mappingのキー)
+	    bytes32 nextElementLink ;
+	    //インデックス
+	    uint index ;
+	}
+	
+	//LinkedIndexListのMaster
+	struct LinkedIndexMaster {
+	    //リストの最初の要素
+	    bytes32 firstElementKey ;
+	    //リストの最後の要素
+	    bytes32 lastElementKey ;
+	}
+	
 // --ストラクチャ定義 End--
 
 // --定数定義 Start--
@@ -122,6 +143,11 @@ contract Bank {
     uint constant MAX_PREV_PROCESS_NUM =5;
     //processのステータス（未着手)
     uint constant PROC_STATUS_WAITING=0;
+    
+    // --LinkedIndexListのキー--
+    // UserGroupとStatusからProcessを探すインデックスのタイプ
+    // 2byte type,4byte UserGroupId,1byte status
+    bytes2 constant INDEX_TYPE_PROCESS_BY_USERGROUP_STATUS = "a1";
     
 // --定数定義 End--
 
@@ -136,20 +162,35 @@ contract Bank {
     mapping (uint => UserGroup) userGroupList;
     //processFlowId =>ProcessFlow
     mapping (uint => ProcessFlow) processFlowList;
+    //processId=>Process
+    mapping (uint => Process) processList;
         
     // --index--
     //Userが属するUserGroupIdのリスト
-    mapping (uint => uint) userGroupIdByUserIdIndex;
+    mapping (uint => uint[]) userGroupIdByUserIdIndex;
     //UserGroupが保有するUserIdのリスト
-    mapping (uint => uint) userIdByUserGroupIdIndex;
+    mapping (uint => uint[]) userIdByUserGroupIdIndex;
+    //ProcessFlowが持つProcessId群
+    mapping (uint => uint[]) processIdByProcessFlowIdIndex;
+    //processFlowが持つProcessNumberのステータス 添え字：processNumber 値：status
+    mapping (uint => uint[]) processStatusByProcessFlowIdIndex;
+    
+    // インデックスを持つ汎用的なLinked List
+    mapping (bytes32 => mapping(bytes32 => LinkedIndexlement)) linkedIndexList;
+    // LinkedIndexListのMaster
+    mapping (bytes32 => LinkedIndexMaster) linkedIndexListMaster;  
     
     //counter
     uint private userCounter = 0;
 	uint private requestCounter = 0;
 	uint private processFlowCounter = 0;
+	uint private processCounter = 0;
 // --変数定義 End--
     
 // --Public関数定義 Start--
+    // ログ
+    event remmitanceRequestLog(uint _requestId,uint _status);
+
     // ビジネスロジック
     // 送金依頼登録
 	function newRemmitanceRequest(uint _requestType,bytes32 _branchNo,bytes32 _accountNo,bytes32 _accountHolderName,
@@ -184,10 +225,11 @@ contract Bank {
         processFlowList[processFlowCounter].processFlowId = processFlowCounter ;
         processFlowList[processFlowCounter].requestId = requestCounter ;
         
+        remmitanceRequestLog(requestCounter,1) ;
         return true;
 	}
 	
-	function getRemmitanceRequest(uint _requestId) public constant returns(bytes32[] remittanceRequest) {
+	function getRemmitanceRequest(uint _requestId) public constant returns(bytes32[14] remittanceRequest) {
 
         //送金依頼の取得
         remittanceRequest[0] = bytes32(remmitanceRequestList[_requestId].requestId) ;
@@ -211,18 +253,111 @@ contract Bank {
 	function putProcess(uint _processFlowId,uint _processNumber,uint _targetUserGroupId,uint[MAX_PREV_PROCESS_NUM] _prevProcessNumber,
         bytes32 _ipfsHashFirst,bytes32 _ipfsHashSecond) public returns(bool result) {
 	    
-	    processFlowList[_processFlowId].processes[_processNumber].processFlowId = _processFlowId ;
-	    processFlowList[_processFlowId].processes[_processNumber].processNumber = _processNumber ;
-	    
-	    processFlowList[_processFlowId].processes[_processNumber].targetUserGroupId = _targetUserGroupId ;
-	    processFlowList[_processFlowId].processes[_processNumber].prevProcessNumber = _prevProcessNumber ;
-	    processFlowList[_processFlowId].processes[_processNumber].status = PROC_STATUS_WAITING ;
-	    processFlowList[_processFlowId].processes[_processNumber].ipfsHashFirst = _ipfsHashFirst ;
-	    processFlowList[_processFlowId].processes[_processNumber].ipfsHashSecond = _ipfsHashSecond ;
+	    processCounter++ ;
+
+	    //processListへの追加
+	    processList[processCounter].processId = processCounter ;
+	    processList[processCounter].processFlowId = _processFlowId ;
+	    processList[processCounter].processNumber = _processNumber ;
+	    processList[processCounter].targetUserGroupId = _targetUserGroupId ;
+	    processList[processCounter].prevProcessNumber = _prevProcessNumber ;
+	    processList[processCounter].status = PROC_STATUS_WAITING ;
+	    processList[processCounter].ipfsHashFirst = _ipfsHashFirst ;
+	    processList[processCounter].ipfsHashSecond = _ipfsHashSecond ;
+
+        //processFlowとの関連付け
+        processIdByProcessFlowIdIndex[_processFlowId].push(processCounter) ;
+        
+        //UserGroupId・Statusとの関連付け
+        bytes32 key1 ;
+        key1.concat(INDEX_TYPE_PROCESS_BY_USERGROUP_STATUS) ;
+        
+        pushLinkedIndexList(INDEX_TYPE_PROCESS_BY_USERGROUP_STATUS + bytes4(_targetUserGroupId) + bytes1(PROC_STATUS_WAITING),
+        bytes32(processCounter),processCounter) ;
 	    
 	    return true;
 	    
 	}
+	//LinkedIndexListへのアクセス nextKey2:ページングなどリストを続きから取得する場合に前回の最後の要素
+	function getLinkedIndexListElements(bytes32 _key1,bytes32 _lastKey2) public constant returns(uint[10] resultIndexList,bytes32 lastKey2){
+	    // 最初に取得する要素を取得
+	    bytes32 currentElementKey ;
+	    if(_lastKey2 == bytes32(0)){
+	        //最初の要素から取得
+	        currentElementKey = linkedIndexListMaster[_key1].firstElementKey ;
+	    }else{
+	        //続きの要素から取得
+	        currentElementKey = linkedIndexList[_key1][_lastKey2].nextElementLink ;	        
+	    }
+	    
+	    //一度に返す要素数分LinkedListから結果リストに格納
+	    for(uint i = 0; i < resultIndexList.length ;i++){
+	        resultIndexList[i] = linkedIndexList[_key1][currentElementKey].index ;
+	        //最後の要素はmappingのキーも返す(値を持つ要素の場合のみ格納)
+	        if( resultIndexList[i] != 0){
+	            lastKey2 = currentElementKey ;
+	        }
+	        currentElementKey = linkedIndexList[_key1][currentElementKey].nextElementLink ;
+	    }
+	}
+	function pushLinkedIndexList(bytes32 _key1,bytes32 _key2,uint _index) public returns(bool){
+	    //対象のIndexListのマスターから最後の要素を取得
+	    bytes32 lastElementKey = linkedIndexListMaster[_key1].lastElementKey;
+	    
+	    //今回が最初の要素の場合、最初の要素を更新
+	    if(linkedIndexListMaster[_key1].firstElementKey == bytes32(0)){
+	        linkedIndexListMaster[_key1].firstElementKey = _key2 ;
+	    }else{
+	        //最初の要素じゃない場合、前の要素を更新
+	        linkedIndexList[_key1][lastElementKey].nextElementLink = _key2 ;
+	    }
+	    
+	    //要素を追加
+	    linkedIndexList[_key1][_key2].prevElementLink = lastElementKey ;
+	    linkedIndexList[_key1][_key2].nextElementLink = bytes32(0);
+	    linkedIndexList[_key1][_key2].index = _index;
+	    
+	    //最後の要素を更新
+	    linkedIndexListMaster[_key1].lastElementKey = _key2 ;
+	    
+	    return true ;
+	    
+	}
+	function removeLinkedIndexList(bytes32 _key1,bytes32 _key2) public returns(bool){
+	    //対象のIndexListの前後のリンクを付け替える
+	    bytes32 prevElementLink = linkedIndexList[_key1][_key2].prevElementLink;
+	    bytes32 nextElementLink = linkedIndexList[_key1][_key2].nextElementLink;
+
+        //削除対象の要素が最初の要素の場合
+        if(linkedIndexListMaster[_key1].firstElementKey == _key2){
+            //次の要素があれば、最初の要素を更新する
+            if(nextElementLink == bytes32(0)){
+            }else{
+                linkedIndexListMaster[_key1].firstElementKey = nextElementLink ;
+            }
+        }else{
+    	    //前の要素のリンク付け替え
+    	    linkedIndexList[_key1][prevElementLink].nextElementLink = nextElementLink ;            
+        }
+
+        //削除対象の要素が最後の要素の場合
+        if(linkedIndexListMaster[_key1].lastElementKey == _key2){
+            //前の要素があれば、最後の要素を更新する
+            if(prevElementLink == bytes32(0)){
+            }else{
+                linkedIndexListMaster[_key1].lastElementKey = prevElementLink ;
+            }            
+        }else{
+    	    //次の要素のリンク付け替え
+    	    linkedIndexList[_key1][nextElementLink].prevElementLink = prevElementLink ;
+        }
+	    
+	    //解放
+	    delete linkedIndexList[_key1][_key2] ;
+	    
+	    return true ;
+	}
+
     // indexリストの取得
 //     function getUserAccountIndexDesc(uint _userId,uint _startIndex) public constant returns(bytes32[10] accountIndexList ){
         
