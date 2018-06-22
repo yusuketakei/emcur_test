@@ -1,7 +1,5 @@
 pragma solidity ^0.4.16;
 
-import {Memory} from "github.com/ethereum/solidity-examples/blob/master/src/unsafe/Memory.sol";
-import {Bytes} from "github.com/ethereum/solidity-examples/blob/master/src/bytes/Bytes.sol" ;
 contract EMCUR {
 
 // --ストラクチャ定義 Start--
@@ -270,14 +268,26 @@ contract EMCUR {
         
         //UserGroupId・Statusとの関連付け
         bytes32 key1 ;
-        key1.concat(INDEX_TYPE_PROCESS_BY_USERGROUP_STATUS) ;
+		key1 = copyToBytes(key1,bytes32(INDEX_TYPE_PROCESS_BY_USERGROUP_STATUS),0,0);
+		key1 = copyToBytes(key1,bytes32(_targetUserGroupId),1,4);
+		key1 = copyToBytes(key1,bytes32(PROC_STATUS_WAITING),5,5);
+//		key1 = copyToBytes(key1,bytes32(processCounter),6,31);
         
-        pushLinkedIndexList(INDEX_TYPE_PROCESS_BY_USERGROUP_STATUS + bytes4(_targetUserGroupId) + bytes1(PROC_STATUS_WAITING),
-        bytes32(processCounter),processCounter) ;
+        pushLinkedIndexList(key1,bytes32(processCounter),processCounter) ;
 	    
 	    return true;
 	    
 	}
+	//bytes の指定したへのコピー
+	function copyToBytes(bytes32 _targetBytes,bytes32 _sourceBytes,uint _fromIndex,uint _toIndex) constant returns (bytes32){
+		//指定したbytesのインデックスに対象のインデックスをコピー
+		for(uint i = 0; i <= _toIndex-_fromIndex;i++){
+//			_targetBytes[i + _fromIndex] = _sourceBytes[i] ;
+//            return bytes32(_targetBytes[i + _fromIndex]) ;
+		}
+		return _targetBytes ;
+	}
+	
 	//LinkedIndexListへのアクセス nextKey2:ページングなどリストを続きから取得する場合に前回の最後の要素
 	function getLinkedIndexListElements(bytes32 _key1,bytes32 _lastKey2) public constant returns(uint[10] resultIndexList,bytes32 lastKey2){
 	    // 最初に取得する要素を取得
