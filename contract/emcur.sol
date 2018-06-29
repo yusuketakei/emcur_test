@@ -1,4 +1,4 @@
-pragma solidity ^0.4.16;
+pragma solidity ^0.4.10;
 
 contract EMCUR {
 
@@ -115,9 +115,9 @@ contract EMCUR {
 	//LinkedIndexListの要素
 	struct LinkedIndexlement {
 	    //前の要素へのリンク(1つ目のmappingのキー)
-	    bytes32 prevElementLink ;
+	    string prevElementLink ;
 	    //次の要素へのリンク(mappingのキー)
-	    bytes32 nextElementLink ;
+	    string nextElementLink ;
 	    //インデックス
 	    uint index ;
 	}
@@ -125,9 +125,9 @@ contract EMCUR {
 	//LinkedIndexListのMaster
 	struct LinkedIndexMaster {
 	    //リストの最初の要素
-	    bytes32 firstElementKey ;
+	    string firstElementKey ;
 	    //リストの最後の要素
-	    bytes32 lastElementKey ;
+	    string lastElementKey ;
 	}
 	
 // --ストラクチャ定義 End--
@@ -174,9 +174,9 @@ contract EMCUR {
     mapping (uint => uint[]) processStatusByProcessFlowIdIndex;
     
     // インデックスを持つ汎用的なLinked List
-    mapping (bytes32 => mapping(bytes32 => LinkedIndexlement)) linkedIndexList;
+    mapping (string => mapping(string => LinkedIndexlement)) linkedIndexList;
     // LinkedIndexListのMaster
-    mapping (bytes32 => LinkedIndexMaster) linkedIndexListMaster;  
+    mapping (string => LinkedIndexMaster) linkedIndexListMaster;  
     
     //counter
     uint private userCounter = 0;
@@ -268,31 +268,19 @@ contract EMCUR {
         
         //UserGroupId・Statusとの関連付け
         bytes32 key1 ;
-		key1 = copyToBytes(key1,bytes32(INDEX_TYPE_PROCESS_BY_USERGROUP_STATUS),0,0);
-		key1 = copyToBytes(key1,bytes32(_targetUserGroupId),1,4);
-		key1 = copyToBytes(key1,bytes32(PROC_STATUS_WAITING),5,5);
-//		key1 = copyToBytes(key1,bytes32(processCounter),6,31);
+        //key1.concat(INDEX_TYPE_PROCESS_BY_USERGROUP_STATUS) ;
         
-        pushLinkedIndexList(key1,bytes32(processCounter),processCounter) ;
+        //pushLinkedIndexList(INDEX_TYPE_PROCESS_BY_USERGROUP_STATUS + bytes4(_targetUserGroupId) + bytes1(PROC_STATUS_WAITING),
+        //bytes32(processCounter),processCounter) ;
 	    
 	    return true;
 	    
 	}
-	//bytes の指定したへのコピー
-	function copyToBytes(bytes32 _targetBytes,bytes32 _sourceBytes,uint _fromIndex,uint _toIndex) constant returns (bytes32){
-		//指定したbytesのインデックスに対象のインデックスをコピー
-		for(uint i = 0; i <= _toIndex-_fromIndex;i++){
-//			_targetBytes[i + _fromIndex] = _sourceBytes[i] ;
-//            return bytes32(_targetBytes[i + _fromIndex]) ;
-		}
-		return _targetBytes ;
-	}
-	
 	//LinkedIndexListへのアクセス nextKey2:ページングなどリストを続きから取得する場合に前回の最後の要素
-	function getLinkedIndexListElements(bytes32 _key1,bytes32 _lastKey2) public constant returns(uint[10] resultIndexList,bytes32 lastKey2){
+	function getLinkedIndexListElements(string _key1,string _lastKey2) public constant returns(uint[10] resultIndexList,string lastKey2){
 	    // 最初に取得する要素を取得
-	    bytes32 currentElementKey ;
-	    if(_lastKey2 == bytes32(0)){
+	    string memory currentElementKey ;
+	    if(bytes(_lastKey2).length == 0){
 	        //最初の要素から取得
 	        currentElementKey = linkedIndexListMaster[_key1].firstElementKey ;
 	    }else{
@@ -310,12 +298,12 @@ contract EMCUR {
 	        currentElementKey = linkedIndexList[_key1][currentElementKey].nextElementLink ;
 	    }
 	}
-	function pushLinkedIndexList(bytes32 _key1,bytes32 _key2,uint _index) public returns(bool){
+	function pushLinkedIndexList(string _key1,string _key2,uint _index) public returns(bool){
 	    //対象のIndexListのマスターから最後の要素を取得
-	    bytes32 lastElementKey = linkedIndexListMaster[_key1].lastElementKey;
+	    string memory lastElementKey = linkedIndexListMaster[_key1].lastElementKey;
 	    
 	    //今回が最初の要素の場合、最初の要素を更新
-	    if(linkedIndexListMaster[_key1].firstElementKey == bytes32(0)){
+	    if(bytes(linkedIndexListMaster[_key1].firstElementKey).length == 0){
 	        linkedIndexListMaster[_key1].firstElementKey = _key2 ;
 	    }else{
 	        //最初の要素じゃない場合、前の要素を更新
@@ -324,7 +312,7 @@ contract EMCUR {
 	    
 	    //要素を追加
 	    linkedIndexList[_key1][_key2].prevElementLink = lastElementKey ;
-	    linkedIndexList[_key1][_key2].nextElementLink = bytes32(0);
+	    linkedIndexList[_key1][_key2].nextElementLink = "";
 	    linkedIndexList[_key1][_key2].index = _index;
 	    
 	    //最後の要素を更新
@@ -333,15 +321,15 @@ contract EMCUR {
 	    return true ;
 	    
 	}
-	function removeLinkedIndexList(bytes32 _key1,bytes32 _key2) public returns(bool){
+	function removeLinkedIndexList(string _key1,string _key2) public returns(bool){
 	    //対象のIndexListの前後のリンクを付け替える
-	    bytes32 prevElementLink = linkedIndexList[_key1][_key2].prevElementLink;
-	    bytes32 nextElementLink = linkedIndexList[_key1][_key2].nextElementLink;
+	    string memory prevElementLink = linkedIndexList[_key1][_key2].prevElementLink;
+	    string memory nextElementLink = linkedIndexList[_key1][_key2].nextElementLink;
 
         //削除対象の要素が最初の要素の場合
-        if(linkedIndexListMaster[_key1].firstElementKey == _key2){
+        if(keccak256(linkedIndexListMaster[_key1].firstElementKey) == keccak256(_key2)){
             //次の要素があれば、最初の要素を更新する
-            if(nextElementLink == bytes32(0)){
+            if(bytes(nextElementLink).length == 0){
             }else{
                 linkedIndexListMaster[_key1].firstElementKey = nextElementLink ;
             }
@@ -351,9 +339,9 @@ contract EMCUR {
         }
 
         //削除対象の要素が最後の要素の場合
-        if(linkedIndexListMaster[_key1].lastElementKey == _key2){
+        if(keccak256(linkedIndexListMaster[_key1].lastElementKey) == keccak256(_key2)){
             //前の要素があれば、最後の要素を更新する
-            if(prevElementLink == bytes32(0)){
+            if(bytes(prevElementLink).length == 0){
             }else{
                 linkedIndexListMaster[_key1].lastElementKey = prevElementLink ;
             }            
