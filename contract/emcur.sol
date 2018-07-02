@@ -145,7 +145,7 @@ contract EMCUR {
     // --LinkedIndexListのキー--
     // UserGroupとStatusからProcessを探すインデックスのタイプ
     // 2byte type,4byte UserGroupId,1byte status
-    bytes2 constant INDEX_TYPE_PROCESS_BY_USERGROUP_STATUS = "a1";
+    string constant INDEX_TYPE_PROCESS_BY_USERGROUP_STATUS = "a1";
     
 // --定数定義 End--
 
@@ -223,7 +223,7 @@ contract EMCUR {
         processFlowList[processFlowCounter].processFlowId = processFlowCounter ;
         processFlowList[processFlowCounter].requestId = requestCounter ;
         
-        remmitanceRequestLog(requestCounter,1) ;
+        emit remmitanceRequestLog(requestCounter,1) ;
         return true;
 	}
 	
@@ -276,6 +276,21 @@ contract EMCUR {
 	    return true;
 	    
 	}
+	
+	//stringのconcat
+	function concatStr(string _sourceStr,string _conTargetStr) public constant returns (string){
+	    bytes memory returnStr = bytes(_sourceStr) ;
+	    uint sourceStrLength = returnStr.length ;
+	    bytes memory conTargetStr = bytes(_conTargetStr) ;
+	    
+	    //1byteずつ結合していく
+	   // for(uint i=0 ;i < conTargetStr.length; i++){
+	   //     returnStr[sourceStrLength+i] = conTargetStr[i] ;
+	   // }
+	   returnStr[sourceStrLength+0] = conTargetStr[0] ;
+	   return string(returnStr) ;
+	}
+	
 	//LinkedIndexListへのアクセス nextKey2:ページングなどリストを続きから取得する場合に前回の最後の要素
 	function getLinkedIndexListElements(string _key1,string _lastKey2) public constant returns(uint[10] resultIndexList,string lastKey2){
 	    // 最初に取得する要素を取得
