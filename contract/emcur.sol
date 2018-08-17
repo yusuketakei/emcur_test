@@ -278,6 +278,33 @@ contract EMCUR {
 	}
 	
 	//stringのconcat
+	function concatStr4(string _sourceStr1,string _sourceStr2,string _sourceStr3,string _sourceStr4) public constant returns (string){
+	    bytes memory sourceStr1 = bytes(_sourceStr1) ;
+	    bytes memory sourceStr2 = bytes(_sourceStr2) ;
+	    bytes memory sourceStr3 = bytes(_sourceStr3) ;
+	    bytes memory sourceStr4 = bytes(_sourceStr4) ;
+
+	    bytes memory concatStr ;
+	    
+	    //1byteずつ結合していく-> 4データソース分
+	    for(uint i_1=0 ;i_1 < sourceStr1.length; i_1++){
+	        concatStr[i_1] = sourceStr1[i_1] ;
+	    }
+	   // for(uint i_2=0 ;i_2 < sourceStr2.length; i_2++){
+	   //     concatStr[concatStr.length] = sourceStr2[i_2] ;
+	   // }
+	   // for(uint i_3=0 ;i_3 < sourceStr3.length; i_3++){
+	   //     concatStr[concatStr.length] = sourceStr3[i_3] ;
+	   // }
+	   // for(uint i_4=0 ;i_4 < sourceStr4.length; i_4++){
+	   //     concatStr[concatStr.length] = sourceStr4[i_4] ;
+	   // }
+	    
+	   return string(concatStr) ;
+	}
+	
+	
+	//stringのconcat
 	function concatStr(string _sourceStr,string _conTargetStr) public constant returns (string){
 	    bytes memory returnStr = bytes(_sourceStr) ;
 	    uint sourceStrLength = returnStr.length ;
