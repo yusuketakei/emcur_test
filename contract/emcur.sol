@@ -5,12 +5,10 @@ contract EMCUR {
 // --ストラクチャ定義 Start--
 	// ユーザ情報
 	struct User {
-		// ユーザID
-		uint userId;
+        // ユーザーアドレス
+        address userAddress;
 		// ユーザ名
 		bytes32 userName;
-        // ユーザーアカウントアドレス
-        address userAccountAddress;
         // 削除フラグ
 		bool delFlag;
 	}
@@ -115,9 +113,9 @@ contract EMCUR {
 	//LinkedIndexListの要素
 	struct LinkedIndexlement {
 	    //前の要素へのリンク(1つ目のmappingのキー)
-	    string prevElementLink ;
+	    uint prevElementLink ;
 	    //次の要素へのリンク(mappingのキー)
-	    string nextElementLink ;
+	    uint nextElementLink ;
 	    //インデックス
 	    uint index ;
 	}
@@ -125,9 +123,9 @@ contract EMCUR {
 	//LinkedIndexListのMaster
 	struct LinkedIndexMaster {
 	    //リストの最初の要素
-	    string firstElementKey ;
+	    uint firstElementKey ;
 	    //リストの最後の要素
-	    string lastElementKey ;
+	    uint lastElementKey ;
 	}
 	
 // --ストラクチャ定義 End--
@@ -150,8 +148,8 @@ contract EMCUR {
 // --定数定義 End--
 
 // --変数定義 Start--
-    //userId→User
-	mapping (uint => User) userList;
+    //userAddress→User
+	mapping (address => User) userList;
     //branchAccountNo→Account
     mapping (bytes32 => Account) accountList;
     //requestId→RemmitanceRequest
@@ -164,19 +162,19 @@ contract EMCUR {
     mapping (uint => Process) processList;
         
     // --index--
-    //Userが属するUserGroupIdのリスト
-    mapping (uint => uint[]) userGroupIdByUserIdIndex;
-    //UserGroupが保有するUserIdのリスト
-    mapping (uint => uint[]) userIdByUserGroupIdIndex;
+    //Userが属するUserGroupId(User:UserGroup=N:1)
+    mapping (address => uint) userGroupIdByUserAddressIndex;
+    //UserGroupが保有するUserAddressのリスト
+    mapping (uint => address[]) userAddressByUserGroupIdIndex;
     //ProcessFlowが持つProcessId群
     mapping (uint => uint[]) processIdByProcessFlowIdIndex;
     //processFlowが持つProcessNumberのステータス 添え字：processNumber 値：status
     mapping (uint => uint[]) processStatusByProcessFlowIdIndex;
     
     // インデックスを持つ汎用的なLinked List
-    mapping (string => mapping(string => LinkedIndexlement)) linkedIndexList;
+    mapping (uint => mapping(uint => LinkedIndexlement)) linkedIndexList;
     // LinkedIndexListのMaster
-    mapping (string => LinkedIndexMaster) linkedIndexListMaster;  
+    mapping (uint => LinkedIndexMaster) linkedIndexListMaster;  
     
     //counter
     uint private userCounter = 0;
@@ -317,12 +315,25 @@ contract EMCUR {
 	   returnStr[sourceStrLength+0] = conTargetStr[0] ;
 	   return string(returnStr) ;
 	}
+
+	//LinkedIndexListへのアクセス 全件の取得
+	function getLinkedIndexListElements(uint _key1) public constant returns(uint[] resultIndexList){
+        //最初の要素から取得
+        uint currentElementKey ;
+        currentElementKey = linkedIndexListMaster[_key1].firstElementKey ;
+	  
+	    //一度に返す要素数分LinkedListから結果リストに格納
+	    for(uint i = 0; i < resultIndexList.length ;i++){
+	        resultIndexList[i] = linkedIndexList[_key1][currentElementKey].index ;
+	        currentElementKey = linkedIndexList[_key1][currentElementKey].nextElementLink ;
+	    }
+	}
 	
 	//LinkedIndexListへのアクセス nextKey2:ページングなどリストを続きから取得する場合に前回の最後の要素
-	function getLinkedIndexListElements(string _key1,string _lastKey2) public constant returns(uint[10] resultIndexList,string lastKey2){
+	function getLinkedIndexListElementsWithPaging(uint _key1,uint _lastKey2) public constant returns(uint[10] resultIndexList,uint lastKey2){
 	    // 最初に取得する要素を取得
-	    string memory currentElementKey ;
-	    if(bytes(_lastKey2).length == 0){
+	    uint currentElementKey ;
+	    if(_lastKey2 == 0){
 	        //最初の要素から取得
 	        currentElementKey = linkedIndexListMaster[_key1].firstElementKey ;
 	    }else{
@@ -340,12 +351,12 @@ contract EMCUR {
 	        currentElementKey = linkedIndexList[_key1][currentElementKey].nextElementLink ;
 	    }
 	}
-	function pushLinkedIndexList(string _key1,string _key2,uint _index) public returns(bool){
+	function pushLinkedIndexList(uint _key1,uint _key2,uint _index) public returns(bool){
 	    //対象のIndexListのマスターから最後の要素を取得
-	    string memory lastElementKey = linkedIndexListMaster[_key1].lastElementKey;
+	    uint lastElementKey = linkedIndexListMaster[_key1].lastElementKey;
 	    
 	    //今回が最初の要素の場合、最初の要素を更新
-	    if(bytes(linkedIndexListMaster[_key1].firstElementKey).length == 0){
+	    if(linkedIndexListMaster[_key1].firstElementKey == 0){
 	        linkedIndexListMaster[_key1].firstElementKey = _key2 ;
 	    }else{
 	        //最初の要素じゃない場合、前の要素を更新
@@ -354,7 +365,7 @@ contract EMCUR {
 	    
 	    //要素を追加
 	    linkedIndexList[_key1][_key2].prevElementLink = lastElementKey ;
-	    linkedIndexList[_key1][_key2].nextElementLink = "";
+	    linkedIndexList[_key1][_key2].nextElementLink = 0 ;
 	    linkedIndexList[_key1][_key2].index = _index;
 	    
 	    //最後の要素を更新
@@ -363,15 +374,15 @@ contract EMCUR {
 	    return true ;
 	    
 	}
-	function removeLinkedIndexList(string _key1,string _key2) public returns(bool){
+	function removeLinkedIndexList(uint _key1,uint _key2) public returns(bool){
 	    //対象のIndexListの前後のリンクを付け替える
-	    string memory prevElementLink = linkedIndexList[_key1][_key2].prevElementLink;
-	    string memory nextElementLink = linkedIndexList[_key1][_key2].nextElementLink;
+	    uint prevElementLink = linkedIndexList[_key1][_key2].prevElementLink;
+	    uint nextElementLink = linkedIndexList[_key1][_key2].nextElementLink;
 
         //削除対象の要素が最初の要素の場合
-        if(keccak256(linkedIndexListMaster[_key1].firstElementKey) == keccak256(_key2)){
+        if(linkedIndexListMaster[_key1].firstElementKey == _key2){
             //次の要素があれば、最初の要素を更新する
-            if(bytes(nextElementLink).length == 0){
+            if(nextElementLink == 0){
             }else{
                 linkedIndexListMaster[_key1].firstElementKey = nextElementLink ;
             }
@@ -383,7 +394,7 @@ contract EMCUR {
         //削除対象の要素が最後の要素の場合
         if(keccak256(linkedIndexListMaster[_key1].lastElementKey) == keccak256(_key2)){
             //前の要素があれば、最後の要素を更新する
-            if(bytes(prevElementLink).length == 0){
+            if(prevElementLink == 0){
             }else{
                 linkedIndexListMaster[_key1].lastElementKey = prevElementLink ;
             }            
@@ -396,6 +407,13 @@ contract EMCUR {
 	    delete linkedIndexList[_key1][_key2] ;
 	    
 	    return true ;
+	}
+	
+	//自分が所属するUserGroupが持つ処理待ちのプロセスの一覧を取得
+	function getMyProcessList() public constant returns(uint[] resultProcessIdList){
+	    uint userGroupId = userGroupIdByUserAddressIndex[msg.sender] ;
+	    uint key1 = uint(keccak256(INDEX_TYPE_PROCESS_BY_USERGROUP_STATUS,bytes32(userGroupId),bytes32(PROC_STATUS_WAITING),"")) ;
+	    return getLinkedIndexListElements(key1) ;
 	}
 
     // indexリストの取得
