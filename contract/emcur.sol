@@ -139,11 +139,17 @@ contract EMCUR {
     uint constant MAX_PREV_PROCESS_NUM =5;
     //processのステータス（未着手)
     uint constant PROC_STATUS_WAITING=0;
+    //processのステータス（済)
+    uint constant PROC_STATUS_DONE=1;
     
     // --LinkedIndexListのキー--
+    // UserGroupからProcessを探すインデックスのタイプ
+    // 2byte type,4byte UserGroupId
+    string constant INDEX_TYPE_PROCESS_BY_USERGROUP = "ug";
+
     // UserGroupとStatusからProcessを探すインデックスのタイプ
     // 2byte type,4byte UserGroupId,1byte status
-    string constant INDEX_TYPE_PROCESS_BY_USERGROUP_STATUS = "a1";
+    string constant INDEX_TYPE_PROCESS_BY_USERGROUP_STATUS = "us";
     
 // --定数定義 End--
 
@@ -264,57 +270,58 @@ contract EMCUR {
         //processFlowとの関連付け
         processIdByProcessFlowIdIndex[_processFlowId].push(processCounter) ;
         
-        //UserGroupId・Statusとの関連付け
-        bytes32 key1 ;
-        //key1.concat(INDEX_TYPE_PROCESS_BY_USERGROUP_STATUS) ;
+        //processFlowとのProcessNumberの紐付け
+        processStatusByProcessFlowIdIndex[_processFlowId][_processNumber] = PROC_STATUS_WAITING ;
         
-        //pushLinkedIndexList(INDEX_TYPE_PROCESS_BY_USERGROUP_STATUS + bytes4(_targetUserGroupId) + bytes1(PROC_STATUS_WAITING),
-        //bytes32(processCounter),processCounter) ;
-	    
-	    return true;
-	    
-	}
-	
-	//stringのconcat
-	function concatStr4(string _sourceStr1,string _sourceStr2,string _sourceStr3,string _sourceStr4) public constant returns (string){
-	    bytes memory sourceStr1 = bytes(_sourceStr1) ;
-	    bytes memory sourceStr2 = bytes(_sourceStr2) ;
-	    bytes memory sourceStr3 = bytes(_sourceStr3) ;
-	    bytes memory sourceStr4 = bytes(_sourceStr4) ;
+        //UserGroupId・Statusとの関連付け
+        uint key1 = createLinkedListKey1ProcessByUsergroupStatus(_targetUserGroupId,PROC_STATUS_WAITING) ;
+        pushLinkedIndexList(key1,processCounter,processCounter) ;
 
-	    bytes memory concatStr ;
-	    
-	    //1byteずつ結合していく-> 4データソース分
-	    for(uint i_1=0 ;i_1 < sourceStr1.length; i_1++){
-	        concatStr[i_1] = sourceStr1[i_1] ;
-	    }
-	   // for(uint i_2=0 ;i_2 < sourceStr2.length; i_2++){
-	   //     concatStr[concatStr.length] = sourceStr2[i_2] ;
-	   // }
-	   // for(uint i_3=0 ;i_3 < sourceStr3.length; i_3++){
-	   //     concatStr[concatStr.length] = sourceStr3[i_3] ;
-	   // }
-	   // for(uint i_4=0 ;i_4 < sourceStr4.length; i_4++){
-	   //     concatStr[concatStr.length] = sourceStr4[i_4] ;
-	   // }
-	    
-	   return string(concatStr) ;
+        //UserGroupIdとの関連付け（Status問わない）
+        key1 = createLinkedListKey1ProcessByUsergroup(_targetUserGroupId) ;
+        pushLinkedIndexList(key1,processCounter,processCounter) ;
+
+	    return true;
+	}
+	// processの取得
+	function getProcess(uint _processId) public constant returns (bytes32[10] returnProcess){
+		returnProcess[0] = bytes32(processList[_processId].processId) ;
+		returnProcess[1] = bytes32(processList[_processId].processFlowId) ;
+		returnProcess[2] = bytes32(processList[_processId].processNumber) ;
+		returnProcess[3] = bytes32(processList[_processId].targetUserGroupId) ;
+		returnProcess[4] = bytes32(processList[_processId].status) ;
+		returnProcess[5] = bytes32(processList[_processId].doneTimestamp) ;
+		returnProcess[6] = bytes32(processList[_processId].doneUserId) ;
+		returnProcess[7] = bytes32(processList[_processId].ipfsHashFirst) ;
+		returnProcess[8] = bytes32(processList[_processId].ipfsHashSecond) ;
+
+		return returnProcess ;
 	}
 	
+	// processのStatus更新
+	function updateProcessStatus(uint _processId,uint _status) public constant returns (bool){
 	
-	//stringのconcat
-	function concatStr(string _sourceStr,string _conTargetStr) public constant returns (string){
-	    bytes memory returnStr = bytes(_sourceStr) ;
-	    uint sourceStrLength = returnStr.length ;
-	    bytes memory conTargetStr = bytes(_conTargetStr) ;
-	    
-	    //1byteずつ結合していく
-	   // for(uint i=0 ;i < conTargetStr.length; i++){
-	   //     returnStr[sourceStrLength+i] = conTargetStr[i] ;
-	   // }
-	   returnStr[sourceStrLength+0] = conTargetStr[0] ;
-	   return string(returnStr) ;
+		//該当ステータスに更新できるかチェック
+	
+		return true ;
+	
 	}
+
+	//LinkedListの1つ目のKeyにあたるハッシュ値を生成
+	function createLinkedListKey1(bytes32 _sourceStr1,bytes32 _sourceStr2,bytes32 _sourceStr3,bytes32 _sourceStr4) public constant returns (uint){
+	    return uint(keccak256(_sourceStr1,_sourceStr2,_sourceStr3,_sourceStr4)) ;        
+	}
+	
+	//UserGroupとStatusからProcessを探すインデックスのKey1を生成
+	function createLinkedListKey1ProcessByUsergroupStatus(uint _userGroupId,uint _status) public constant returns (uint){
+	    return uint(keccak256(INDEX_TYPE_PROCESS_BY_USERGROUP_STATUS,bytes4(_userGroupId),bytes1(_status),"")) ;        
+	}
+	
+	//UserGroupとStatusからProcessを探すインデックスのKey1を生成
+	function createLinkedListKey1ProcessByUsergroup(uint _userGroupId) public constant returns (uint){
+	    return uint(keccak256(INDEX_TYPE_PROCESS_BY_USERGROUP,bytes4(_userGroupId),"","")) ;        
+	}
+
 
 	//LinkedIndexListへのアクセス 全件の取得
 	function getLinkedIndexListElements(uint _key1) public constant returns(uint[] resultIndexList){
@@ -328,7 +335,6 @@ contract EMCUR {
 	        currentElementKey = linkedIndexList[_key1][currentElementKey].nextElementLink ;
 	    }
 	}
-	
 	//LinkedIndexListへのアクセス nextKey2:ページングなどリストを続きから取得する場合に前回の最後の要素
 	function getLinkedIndexListElementsWithPaging(uint _key1,uint _lastKey2) public constant returns(uint[10] resultIndexList,uint lastKey2){
 	    // 最初に取得する要素を取得
@@ -392,7 +398,7 @@ contract EMCUR {
         }
 
         //削除対象の要素が最後の要素の場合
-        if(keccak256(linkedIndexListMaster[_key1].lastElementKey) == keccak256(_key2)){
+        if(linkedIndexListMaster[_key1].lastElementKey == _key2){
             //前の要素があれば、最後の要素を更新する
             if(prevElementLink == 0){
             }else{
@@ -408,12 +414,28 @@ contract EMCUR {
 	    
 	    return true ;
 	}
-	
 	//自分が所属するUserGroupが持つ処理待ちのプロセスの一覧を取得
-	function getMyProcessList() public constant returns(uint[] resultProcessIdList){
+	function getMyWatingProcessList() public constant returns(uint[] resultProcessIdList){
 	    uint userGroupId = userGroupIdByUserAddressIndex[msg.sender] ;
-	    uint key1 = uint(keccak256(INDEX_TYPE_PROCESS_BY_USERGROUP_STATUS,bytes32(userGroupId),bytes32(PROC_STATUS_WAITING),"")) ;
+	    uint key1 = createLinkedListKey1ProcessByUsergroupStatus(userGroupId,PROC_STATUS_WAITING) ;
 	    return getLinkedIndexListElements(key1) ;
+	}
+	//processがが実行可能か確認
+	function isExecutableProcess(uint _processId) public constant returns (bool isExecutableFlg){
+	    //このプロセスの前提となるプロセスのProcessNumberを取得
+	    uint[MAX_PREV_PROCESS_NUM] memory prevProcessNumberList = processList[_processId].prevProcessNumber ;
+	    
+	    //前提となるプロセスが完了しているか確認
+	    uint processFlowId = processList[_processId].processFlowId ;
+        uint[] memory processStatusList = processStatusByProcessFlowIdIndex[processFlowId] ;
+
+        for(uint i=1;i<prevProcessNumberList.length;i++){
+            uint targetProcessNumber = prevProcessNumberList[i] ;
+            if(processStatusList[targetProcessNumber] != PROC_STATUS_DONE){
+                return false ;
+            }
+        }
+        return true ;
 	}
 
     // indexリストの取得
