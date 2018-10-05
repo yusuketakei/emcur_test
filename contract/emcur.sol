@@ -22,32 +22,8 @@ contract EMCUR {
 		bool delFlag;
 	}
 
-	// 口座情報
-	struct Account {
-	    // 店番口座番号
-	    bytes32 branchAccountNo; 
-	    // 店番
-	    bytes32 branchNo;
-		// 口座番号
-		bytes32 accountNo;
-        // 口座名義
-        bytes32 accountHolderName;
-		// 口座種別
-		uint accountType;
-		// 通貨
-		bytes32 currency;
-		// 残高
-		uint balance;
-		// 作成タイムスタンプ
-		uint createTimestamp;
-		// 更新タイムスタンプ
-		uint updateTimestamp;
-        // 削除フラグ
-        bool delFlag;
-	}
-
-	// 送金依頼情報
-	struct RemmitanceRequest {
+	// 基本的な依頼情報
+	struct baseRequest {
         // トランザクションID
         uint requestId;
         // 種別
@@ -104,10 +80,14 @@ contract EMCUR {
 	    uint doneTimestamp;
 	    // 処理時のユーザーID
 	    uint doneUserId;
-	    // ipfsハッシュ1
-	    bytes32 ipfsHashFirst;
-	    // ipfsハッシュ2
-	    bytes32 ipfsHashSecond;
+	    // 処理命令用ipfsハッシュ1
+	    bytes32 cmdIpfsHashFirst;
+	    // 処理命令用ipfsハッシュ2
+	    bytes32 cmdIpfsHashSecond;
+	    // ログ用ipfsハッシュ1
+	    bytes32 logIpfsHashFirst;
+	    // ログ用ipfsハッシュ2
+	    bytes32 logIpfsHashSecond;
 	}
 	
 	//LinkedIndexListの要素
@@ -139,8 +119,14 @@ contract EMCUR {
     uint constant MAX_PREV_PROCESS_NUM =5;
     //processのステータス（未着手)
     uint constant PROC_STATUS_WAITING=0;
+    //processのステータス（実行中)
+    uint constant PROC_STATUS_RUNNING=1;
     //processのステータス（済)
-    uint constant PROC_STATUS_DONE=1;
+    uint constant PROC_STATUS_DONE=2;
+    //processのステータス（エラー)
+    uint constant PROC_STATUS_ERROR=9;
+    //processのステータス（回復済)
+    uint constant PROC_STATUS_RECOVERY=8;
     
     // --LinkedIndexListのキー--
     // UserGroupからProcessを探すインデックスのタイプ
@@ -156,10 +142,8 @@ contract EMCUR {
 // --変数定義 Start--
     //userAddress→User
 	mapping (address => User) userList;
-    //branchAccountNo→Account
-    mapping (bytes32 => Account) accountList;
     //requestId→RemmitanceRequest
-	mapping (uint => RemmitanceRequest) remmitanceRequestList;
+	mapping (uint => baseRequest) baseRequestList;
     //userGroupId =>UserGroup
     mapping (uint => UserGroup) userGroupList;
     //processFlowId =>ProcessFlow
@@ -201,26 +185,26 @@ contract EMCUR {
 
         //送金依頼の登録
         requestCounter++;
-        remmitanceRequestList[requestCounter].requestId = requestCounter ;
-        remmitanceRequestList[requestCounter].requestType = _requestType ;
-        remmitanceRequestList[requestCounter].branchNo = _branchNo ;
-        remmitanceRequestList[requestCounter].accountNo = _accountNo ;
-        remmitanceRequestList[requestCounter].accountHolderName = _accountHolderName ;
+        baseRequestList[requestCounter].requestId = requestCounter ;
+        baseRequestList[requestCounter].requestType = _requestType ;
+        baseRequestList[requestCounter].branchNo = _branchNo ;
+        baseRequestList[requestCounter].accountNo = _accountNo ;
+        baseRequestList[requestCounter].accountHolderName = _accountHolderName ;
 
-        remmitanceRequestList[requestCounter].fromCurrency = _fromCurrency ;
-        remmitanceRequestList[requestCounter].toCurrency =  _toCurrency ;
-        remmitanceRequestList[requestCounter].rate = _rate ;
+        baseRequestList[requestCounter].fromCurrency = _fromCurrency ;
+        baseRequestList[requestCounter].toCurrency =  _toCurrency ;
+        baseRequestList[requestCounter].rate = _rate ;
 
-        remmitanceRequestList[requestCounter].fromAmount =  _fromAmount ;
-        remmitanceRequestList[requestCounter].toAmount =  _toAmount ;
+        baseRequestList[requestCounter].fromAmount =  _fromAmount ;
+        baseRequestList[requestCounter].toAmount =  _toAmount ;
 
-        remmitanceRequestList[requestCounter].applicationDate =  _applicationDate ;
-        remmitanceRequestList[requestCounter].valueDate =  _valueDate ;
+        baseRequestList[requestCounter].applicationDate =  _applicationDate ;
+        baseRequestList[requestCounter].valueDate =  _valueDate ;
 
-        remmitanceRequestList[requestCounter].timestamp = block.timestamp ;        
+        baseRequestList[requestCounter].timestamp = block.timestamp ;        
 
-        remmitanceRequestList[requestCounter].ipfsHashFirst =  _ipfsHashFirst ;
-        remmitanceRequestList[requestCounter].ipfsHashSecond =  _ipfsHashSeond ;
+        baseRequestList[requestCounter].ipfsHashFirst =  _ipfsHashFirst ;
+        baseRequestList[requestCounter].ipfsHashSecond =  _ipfsHashSeond ;
         
         //processflowの作成
         processFlowCounter++ ;
@@ -231,25 +215,25 @@ contract EMCUR {
         return true;
 	}
 	
-	function getRemmitanceRequest(uint _requestId) public constant returns(bytes32[14] remittanceRequest) {
+	function getRemmitanceRequest(uint _requestId) public constant returns(bytes32[14] baseRequest) {
 
         //送金依頼の取得
-        remittanceRequest[0] = bytes32(remmitanceRequestList[_requestId].requestId) ;
-        remittanceRequest[1] = bytes32(remmitanceRequestList[_requestId].requestType) ;
-        remittanceRequest[2] = remmitanceRequestList[_requestId].branchNo ;
-        remittanceRequest[3] = remmitanceRequestList[_requestId].accountNo ;
-        remittanceRequest[4] = remmitanceRequestList[_requestId].accountHolderName ;
-        remittanceRequest[5] = remmitanceRequestList[_requestId].fromCurrency ;
-        remittanceRequest[6] = remmitanceRequestList[_requestId].toCurrency ;
-        remittanceRequest[7] = bytes32(remmitanceRequestList[_requestId].fromAmount) ;
-        remittanceRequest[8] = bytes32(remmitanceRequestList[_requestId].toAmount) ;
-        remittanceRequest[9] = remmitanceRequestList[_requestId].applicationDate ;
-        remittanceRequest[10] = remmitanceRequestList[_requestId].valueDate ;
-        remittanceRequest[11] = bytes32(remmitanceRequestList[_requestId].timestamp) ;
-        remittanceRequest[12] = remmitanceRequestList[_requestId].ipfsHashFirst ;
-        remittanceRequest[13] = remmitanceRequestList[_requestId].ipfsHashSecond ;
+        baseRequest[0] = bytes32(baseRequestList[_requestId].requestId) ;
+        baseRequest[1] = bytes32(baseRequestList[_requestId].requestType) ;
+        baseRequest[2] = baseRequestList[_requestId].branchNo ;
+        baseRequest[3] = baseRequestList[_requestId].accountNo ;
+        baseRequest[4] = baseRequestList[_requestId].accountHolderName ;
+        baseRequest[5] = baseRequestList[_requestId].fromCurrency ;
+        baseRequest[6] = baseRequestList[_requestId].toCurrency ;
+        baseRequest[7] = bytes32(baseRequestList[_requestId].fromAmount) ;
+        baseRequest[8] = bytes32(baseRequestList[_requestId].toAmount) ;
+        baseRequest[9] = baseRequestList[_requestId].applicationDate ;
+        baseRequest[10] = baseRequestList[_requestId].valueDate ;
+        baseRequest[11] = bytes32(baseRequestList[_requestId].timestamp) ;
+        baseRequest[12] = baseRequestList[_requestId].ipfsHashFirst ;
+        baseRequest[13] = baseRequestList[_requestId].ipfsHashSecond ;
 
-        return remittanceRequest;
+        return baseRequest;
 	}	
 	// processFlowへのprocess追加
 	function putProcess(uint _processFlowId,uint _processNumber,uint _targetUserGroupId,uint[MAX_PREV_PROCESS_NUM] _prevProcessNumber,
@@ -264,8 +248,8 @@ contract EMCUR {
 	    processList[processCounter].targetUserGroupId = _targetUserGroupId ;
 	    processList[processCounter].prevProcessNumber = _prevProcessNumber ;
 	    processList[processCounter].status = PROC_STATUS_WAITING ;
-	    processList[processCounter].ipfsHashFirst = _ipfsHashFirst ;
-	    processList[processCounter].ipfsHashSecond = _ipfsHashSecond ;
+	    processList[processCounter].cmdIpfsHashFirst = _ipfsHashFirst ;
+	    processList[processCounter].cmdIpfsHashSecond = _ipfsHashSecond ;
 
         //processFlowとの関連付け
         processIdByProcessFlowIdIndex[_processFlowId].push(processCounter) ;
@@ -284,7 +268,7 @@ contract EMCUR {
 	    return true;
 	}
 	// processの取得
-	function getProcess(uint _processId) public constant returns (bytes32[10] returnProcess){
+	function getProcess(uint _processId) public constant returns (bytes32[12] returnProcess){
 		returnProcess[0] = bytes32(processList[_processId].processId) ;
 		returnProcess[1] = bytes32(processList[_processId].processFlowId) ;
 		returnProcess[2] = bytes32(processList[_processId].processNumber) ;
@@ -292,16 +276,32 @@ contract EMCUR {
 		returnProcess[4] = bytes32(processList[_processId].status) ;
 		returnProcess[5] = bytes32(processList[_processId].doneTimestamp) ;
 		returnProcess[6] = bytes32(processList[_processId].doneUserId) ;
-		returnProcess[7] = bytes32(processList[_processId].ipfsHashFirst) ;
-		returnProcess[8] = bytes32(processList[_processId].ipfsHashSecond) ;
+		returnProcess[7] = bytes32(processList[_processId].cmdIpfsHashFirst) ;
+		returnProcess[8] = bytes32(processList[_processId].cmdIpfsHashSecond) ;
+		returnProcess[7] = bytes32(processList[_processId].logIpfsHashFirst) ;
+		returnProcess[8] = bytes32(processList[_processId].logIpfsHashSecond) ;
 
 		return returnProcess ;
 	}
 	
 	// processのStatus更新
-	function updateProcessStatus(uint _processId,uint _status) public constant returns (bool){
+	function _updateProcessStatus(uint _processId,uint _nextStatus) public constant returns (bool){
+	    //Processの現在のステータスを取得
+	    uint currentStatus = processList[_processId].status ;
 	
 		//該当ステータスに更新できるかチェック
+	    //Waiting>Running>Done or Error>Recovery
+	    //waiting->Runnning
+	    if(currentStatus == PROC_STATUS_WAITING){
+	        //次のステータスは"実行中"
+	        require(_nextStatus == PROC_STATUS_RUNNING) ;
+	        //実行可能状態
+	        require(isExecutableProcess(_processId)) ;
+	    }else if(currentStatus == PROC_STATUS_RUNNING){
+	        require(_nextStatus == PROC_STATUS_DONE || _nextStatus == PROC_STATUS_ERROR) ;
+	    }else if(currentStatus == PROC_STATUS_ERROR){
+	        require(_nextStatus == PROC_STATUS_RECOVERY) ;
+	    }
 	
 		return true ;
 	
@@ -417,7 +417,10 @@ contract EMCUR {
 	//自分が所属するUserGroupが持つ処理待ちのプロセスの一覧を取得
 	function getMyWatingProcessList() public constant returns(uint[] resultProcessIdList){
 	    uint userGroupId = userGroupIdByUserAddressIndex[msg.sender] ;
-	    uint key1 = createLinkedListKey1ProcessByUsergroupStatus(userGroupId,PROC_STATUS_WAITING) ;
+	    return _getProcessListByUserGroupIdStatus(userGroupId,PROC_STATUS_WAITING) ;
+	}
+	function _getProcessListByUserGroupIdStatus(uint _userGroupId,uint _status) private constant returns(uint[] resultProcessIdList){
+	    uint key1 = createLinkedListKey1ProcessByUsergroupStatus(_userGroupId,_status) ;
 	    return getLinkedIndexListElements(key1) ;
 	}
 	//processがが実行可能か確認
@@ -437,233 +440,4 @@ contract EMCUR {
         }
         return true ;
 	}
-
-    // indexリストの取得
-//     function getUserAccountIndexDesc(uint _userId,uint _startIndex) public constant returns(bytes32[10] accountIndexList ){
-        
-//         uint num = userAccountIndex[_userId].length;
-// 		uint counter = 0;
-// 		uint indexIndex = num - 1 - _startIndex;
-		
-// 		while (counter <= indexIndex) {
-// 			if (counter >= 10) {
-// 				 break;
-// 			}
-			
-// 			accountIndexList[counter] = userAccountIndex[_userId][indexIndex - counter];
-			
-// 			counter++;
-// 		}
-//     }
-//     // indexリストの取得
-//     function getUserTransactionIndexDesc(uint _userId,uint _startIndex) public constant returns(uint[10] transactionIndexList ){
-        
-//         uint num = userTransactionIndex[_userId].length;
-// 		uint counter = 0;
-// 		uint indexIndex = num - 1 - _startIndex;
-		
-// 		while (counter <= indexIndex) {
-// 			if (counter >= 10) {
-// 				 break;
-// 			}
-			
-// 			transactionIndexList[counter] = userTransactionIndex[_userId][indexIndex - counter];
-			
-// 			counter++;
-// 		}
-//     }
-
-// 	// ユーザの参照
-// 	function getUserInfo(uint _userId) public constant returns(bytes32[3] userInfo) {
-			
-// 		// ユーザ情報の参照
-// 		userInfo[0] = bytes32(userInfoList[_userId].userId);
-//         userInfo[1] = userInfoList[_userId].userName;
-//         userInfo[2] = userInfoList[_userId].userAddress;
-
-// 		return userInfo;
-// 	}
-//     // ユーザの登録
-// 	function registUserInfo(bytes32 _userName, bytes32 _userAddress) public returns(uint userId) {
-			
-// 		// ユーザ情報の登録
-// 		userCounter++;
-//         userInfoList[userCounter].userId = userCounter;
-// 		userInfoList[userCounter].userName = _userName;
-//         userInfoList[userCounter].userAddress = _userAddress;
-// 		userInfoList[userCounter].delFlg = false;
-		
-// 		return userInfoList[userCounter].userId;
-// 	}
-	
-// 	// ユーザの更新
-// 	function updateUserInfo(uint _userId,bytes32 _userName, bytes32 _userAddress) public returns(bool result) {
-		
-// 		// ユーザ登録していない場合はエラーを返す
-// 		if (checkUserExistence(_userId) == false) {
-// 			return false;
-// 		}
-		
-// 		// ユーザ情報の登録
-// 		userInfoList[_userId].userName = _userName;
-// 		userInfoList[_userId].userAddress = _userAddress;
-		
-// 		return true;
-// 	}
-	
-// 	// ユーザの削除
-// 	function deleteUserInfo(uint _userId) public returns(bool result) {
-		
-// 		// ユーザ登録していない場合はエラーを返す
-// 		if (checkUserExistence(_userId) == false) {
-// 			return false;
-// 		}
-		
-// 		// @ToDo 削除のための条件を追加
-		
-		
-// 		// ユーザ情報の更新
-// 		userInfoList[_userId].delFlg = true;
-		
-// 		return true;
-// 	}
-// 	// 口座の参照
-// 	function getAccountInfo(bytes32 _accountNo) public constant returns(bytes32[6] accountInfo) {
-			
-// 		// ユーザ情報の参照
-// 		accountInfo[0] = accountInfoList[_accountNo].accountNo;
-//         accountInfo[1] = accountInfoList[_accountNo].accountHolderName;
-// 		accountInfo[2] = bytes32(accountInfoList[_accountNo].accountType);
-// 		accountInfo[3] = accountInfoList[_accountNo].currency;
-// 		accountInfo[4] = bytes32(accountInfoList[_accountNo].balance);
-// 		accountInfo[5] = bytes32(accountInfoList[_accountNo].userId);
-
-//         return accountInfo;
-// 	}	
-//     // 口座開設
-// 	function registAccountInfo(bytes32 _accountNo,bytes32 _accountHolderName, uint _accountType,bytes32 _currency,uint _balance,uint _userId) public returns(bool result) {
-			
-// 		// 口座情報の登録
-//         accountInfoList[_accountNo].accountNo = _accountNo;
-// 		accountInfoList[_accountNo].accountHolderName = _accountHolderName;
-// 		accountInfoList[_accountNo].accountType = _accountType;
-//         accountInfoList[_accountNo].currency = _currency;
-//         accountInfoList[_accountNo].balance = _balance;
-//         accountInfoList[_accountNo].userId = _userId;
-//         accountInfoList[_accountNo].createTimestamp = block.timestamp;
-//         accountInfoList[_accountNo].updateTimestamp = block.timestamp;
-//         accountInfoList[_accountNo].delFlg = false;
-        
-//         userAccountIndex[_userId].push(_accountNo);
-		
-// 		return true;
-// 	}
-    
-//     //口座閉塞
-//     function deleteAccountInfo(bytes32 _accountNo) public returns(bool result) {
-			
-// 		// 口座の有無確認
-//         if(checkAccountExistence(_accountNo) == false){
-//             return false ;
-//         }
-        
-//         accountInfoList[_accountNo].delFlg = true;
-        
-// 		return true;
-// 	}
-
-//     // トランザクションの参照
-// 	function getTransactionInfo(uint _transactionId) public constant returns(bytes32[13] transactionInfo) {
-			
-// 		// ユーザ情報の参照
-// 		transactionInfo[0] = bytes32(transactionInfoList[_transactionId].transactionId);
-// 		transactionInfo[1] = bytes32(transactionInfoList[_transactionId].transactionStatus);
-// 		transactionInfo[2] = bytes32(transactionInfoList[_transactionId].transactionType);
-// 		transactionInfo[3] = transactionInfoList[_transactionId].fromAccountNo;
-// 		transactionInfo[4] = transactionInfoList[_transactionId].toAccountNo;
-// 		transactionInfo[5] = transactionInfoList[_transactionId].fromAccountHolderName;
-// 		transactionInfo[6] = transactionInfoList[_transactionId].toAccountHolderName;
-// 		transactionInfo[7] = transactionInfoList[_transactionId].fromCurrency;
-// 		transactionInfo[8] = transactionInfoList[_transactionId].toCurrency;
-//         transactionInfo[9] = transactionInfoList[_transactionId].rate;
-// 		transactionInfo[10] = bytes32(transactionInfoList[_transactionId].fromPrinc);
-// 		transactionInfo[11] = bytes32(transactionInfoList[_transactionId].toPrinc);
-// 		transactionInfo[12] = bytes32(transactionInfoList[_transactionId].timestamp);
-
-//         return transactionInfo;
-// 	}	
-
-//     // 振込
-// 	function transfer(uint _transactionType,bytes32 _fromAccountNo,bytes32 _toAccountNo,bytes32 _fromAccountHolderName,bytes32 _toAccountHolderName,bytes32 _fromCurrency,bytes32 _toCurrency,bytes32 _rate,uint _fromPrinc,uint _toPrinc) public returns(bool result) {
-			
-//         // 出金元の通貨チェック
-//         if(accountInfoList[_fromAccountNo].currency != _fromCurrency){
-//             return false ;            
-//         }
-//         // 出金元の残高チェック
-//         if(accountInfoList[_fromAccountNo].balance < _fromPrinc){
-//             return false ;
-//         }
-
-//         //トランザクションの登録
-//         transactionCounter++;
-//         transactionInfoList[transactionCounter].transactionId = transactionCounter ;
-//         transactionInfoList[transactionCounter].transactionStatus = 0 ;
-//         transactionInfoList[transactionCounter].transactionType = _transactionType ;
-
-//         transactionInfoList[transactionCounter].fromAccountNo = _fromAccountNo ;
-//         transactionInfoList[transactionCounter].toAccountNo = _toAccountNo ;
-
-//         transactionInfoList[transactionCounter].fromAccountHolderName = _fromAccountHolderName ;
-//         transactionInfoList[transactionCounter].toAccountHolderName = _toAccountHolderName ;
-
-//         transactionInfoList[transactionCounter].fromCurrency = _fromCurrency ;
-//         transactionInfoList[transactionCounter].toCurrency =  _toCurrency ;
-//         transactionInfoList[transactionCounter].rate = _rate ;
-
-//         transactionInfoList[transactionCounter].fromPrinc =  _fromPrinc ;
-//         transactionInfoList[transactionCounter].toPrinc =  _toPrinc ;
-
-//         transactionInfoList[transactionCounter].timestamp = block.timestamp ;        
-
-//         //残高の増減
-//         accountInfoList[_fromAccountNo].balance = accountInfoList[_fromAccountNo].balance - _fromPrinc;
-//         accountInfoList[_fromAccountNo].updateTimestamp = block.timestamp;
-//         accountInfoList[_toAccountNo].balance = accountInfoList[_toAccountNo].balance + _toPrinc;
-//         accountInfoList[_toAccountNo].updateTimestamp = block.timestamp;
-        
-//         //インデックスの登録
-//         userTransactionIndex[accountInfoList[_fromAccountNo].userId].push(transactionCounter);
-//         if(accountInfoList[_fromAccountNo].userId != accountInfoList[_toAccountNo].userId){
-//             userTransactionIndex[accountInfoList[_toAccountNo].userId].push(transactionCounter);        
-//         }
-        
-//         return true;
-// 	}
-    
-    
- 
-// // --Public関数定義 End--
-
-// // --Private関数定義 Start--
-// 	function checkUserExistence(uint _userId) private constant returns (bool result) {
-// 		if (_userId != userInfoList[_userId].userId) {
-// 			return false;
-// 		}
-// 		if (userInfoList[_userId].delFlg) {
-// 			return false;
-// 		}
-// 		return true;
-// 	}
-	
-// 	function checkAccountExistence(bytes32 _accountNo) private constant returns (bool result) {
-// 		if (_accountNo != accountInfoList[_accountNo].accountNo) {
-// 			return false;
-// 		}
-// 		if (accountInfoList[_accountNo].delFlg) {
-// 			return false;
-// 		}
-// 		return true;
-// 	}    
-// --Private関数定義 End--
 }
